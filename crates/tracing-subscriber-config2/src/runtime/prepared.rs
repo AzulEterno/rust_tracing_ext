@@ -11,6 +11,10 @@ use crate::factory::ResourceGuard;
 use crate::runtime::TracingHandle;
 
 /// Fully validated layers and resources ready for one global installation.
+///
+/// This value owns the constructed layers until [`install`](Self::install) is
+/// called. An enabled value can be installed only once because installation
+/// consumes it and the underlying tracing global is process-wide.
 pub struct PreparedTracing {
     enabled: bool,
     layers: Vec<DynLayer>,
@@ -41,6 +45,11 @@ impl PreparedTracing {
         }
     }
 
+    /// Installs the prepared layers as the process-wide global subscriber.
+    ///
+    /// Disabled configurations return a handle without registering a global
+    /// subscriber. For enabled configurations, this fails if another global
+    /// subscriber has already been installed.
     pub fn install(self) -> Result<TracingHandle, InstallError> {
         if self.enabled {
             tracing::subscriber::set_global_default(Registry::default().with(self.layers))?;

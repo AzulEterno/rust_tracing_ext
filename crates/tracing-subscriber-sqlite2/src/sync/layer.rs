@@ -19,6 +19,12 @@ use crate::schema::TableNames;
 use crate::sync::worker::Command;
 
 /// Synchronous SQLite layer backed by a standard-library worker thread.
+///
+/// Event callbacks only try to enqueue captured records, so a full queue does
+/// not block the subscriber. Clones share the worker, queue, and counters.
+/// Dropping the last clone closes the queue after the worker drains pending
+/// records; call [`flush`](Self::flush) when shutdown needs an explicit
+/// completion point.
 pub struct SqliteLayer {
     pub(crate) sender: SyncSender<Command>,
     pub(crate) dropped: Arc<AtomicU64>,
@@ -36,10 +42,18 @@ impl Clone for SqliteLayer {
 }
 
 impl SqliteLayer {
+    /// Opens a database with [`Config::default`](crate::Config::default) for the synchronous backend.
+    ///
+    /// The required schema is created if it does not already exist.
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
         Self::open_with_config(path, Config::default())
     }
 
+    /// Opens a synchronous SQLite layer with the supplied storage settings.
+    ///
+    /// The configuration is normalized before use: zero queue and batch sizes
+    /// become one, and a zero flush interval becomes ten seconds. The
+    /// configuration's `async_backend` must be `false`.
     pub fn open_with_config(path: impl AsRef<Path>, config: Config) -> rusqlite::Result<Self> {
         let config = config.normalized();
         config.ensure_backend(false)?;
@@ -61,7 +75,12 @@ impl SqliteLayer {
         })
     }
 
-    /// Waits until all commands accepted before this call are processed.
+    /// Waits until the flush marker is processed by the worker.
+    ///
+    /// The worker commits all non-empty batches before acknowledging the marker.
+    /// Events submitted concurrently with this call may be ordered before or
+    /// after the marker. A failed batch is counted by [`write_error_count`](Self::write_error_count)
+    /// and does not make this method return an error.
     pub fn flush(&self) {
         let (reply, wait) = mpsc::channel();
         if self.sender.send(Command::Flush(reply)).is_ok() {
@@ -69,10 +88,18 @@ impl SqliteLayer {
         }
     }
 
+    /// Returns the number of event records that could not be queued.
+    ///
+    /// This includes queue-overflow and disconnected-worker failures. The
+    /// counter is shared by all clones of this layer.
     pub fn dropped_count(&self) -> u64 {
         self.dropped.load(Ordering::Relaxed)
     }
 
+    /// Returns the number of failed non-empty batch writes observed by the worker.
+    ///
+    /// The count is batch-based, so one failed transaction can represent many
+    /// events. The counter is shared by all clones of this layer.
     pub fn write_error_count(&self) -> u64 {
         self.write_errors.load(Ordering::Relaxed)
     }

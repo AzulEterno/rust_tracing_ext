@@ -6,6 +6,11 @@ use tracing_subscriber_config2::factory::LayerFactory;
 use crate::SqliteFactoryConfig;
 use crate::SqliteLayer;
 
+/// Builds [`SqliteLayer`] values for `tracing-subscriber-config2`.
+///
+/// Register this factory with `TracingBuilder::register`. Its configuration
+/// kind is `"sqlite"`; the layer configuration is deserialized as
+/// [`SqliteFactoryConfig`](crate::SqliteFactoryConfig).
 pub struct SqliteLayerFactory;
 
 impl LayerFactory for SqliteLayerFactory {

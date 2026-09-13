@@ -16,16 +16,19 @@ use crate::factory::ResourceGuard;
 use crate::registry::LayerRegistry;
 use crate::runtime::PreparedTracing;
 
+/// Collects layer factories and prepares a configured subscriber.
 #[derive(Default)]
 pub struct TracingBuilder {
     registry: LayerRegistry,
 }
 
 impl TracingBuilder {
+    /// Creates an empty builder with no registered factories.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Registers a synchronous factory, rejecting duplicate kinds.
     pub fn register<F>(&mut self, factory: F) -> Result<&mut Self, RegisterError>
     where
         F: LayerFactory + 'static,
@@ -34,6 +37,7 @@ impl TracingBuilder {
         Ok(self)
     }
 
+    /// Registers an asynchronous factory, rejecting duplicate async kinds.
     pub fn register_async<F>(&mut self, factory: F) -> Result<&mut Self, RegisterError>
     where
         F: AsyncLayerFactory + 'static,
@@ -42,6 +46,11 @@ impl TracingBuilder {
         Ok(self)
     }
 
+    /// Validates and synchronously builds all enabled configured layers.
+    ///
+    /// Validation checks duplicate names, registered kinds, and filters before
+    /// any factory is built. The returned value is ready for one global
+    /// installation with [`PreparedTracing::install`](crate::runtime::PreparedTracing::install).
     pub fn prepare(&self, config: TracingConfig) -> Result<PreparedTracing, PrepareError> {
         if !config.enabled {
             return Ok(PreparedTracing::disabled());
@@ -73,6 +82,10 @@ impl TracingBuilder {
         Ok(PreparedTracing::new(layers, guards, filters))
     }
 
+    /// Asynchronously validates and builds all enabled configured layers.
+    ///
+    /// For a kind with both factory types registered, the async factory is used.
+    /// A synchronous factory is used when no async factory exists for that kind.
     pub async fn prepare_async(
         &self,
         config: TracingConfig,

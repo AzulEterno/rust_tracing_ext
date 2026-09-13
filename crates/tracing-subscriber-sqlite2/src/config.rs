@@ -5,18 +5,45 @@ const BATCH_SIZE: usize = 512;
 const FLUSH_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Storage, queue, and batching settings for a SQLite layer.
+///
+/// [`crate::SqliteLayer::open_with_config`] and
+/// [`crate::AsyncSqliteLayer::open_with_config`] normalize zero queue and batch
+/// sizes to one and a zero flush interval to ten seconds before opening the
+/// database. The constructors also require `async_backend` to match the
+/// selected worker.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
-    /// Selects the Tokio-backed layer when true, or the synchronous layer when false.
+    /// Selects the Tokio-backed layer when `true`, or the synchronous layer when `false`.
+    ///
+    /// This value must match the layer constructor or factory being used.
     pub async_backend: bool,
-    /// Prefix used for this domain's event table and indexes.
+    /// Prefix used for the event table and its indexes.
+    ///
+    /// For example, `tracing` creates `tracing_events`,
+    /// `tracing_events_timestamp`, and `tracing_events_target`.
+    /// The identifier must start with `_` or an ASCII letter and continue with
+    /// only `_` or ASCII letters and digits.
     pub table_prefix: String,
-    /// Shared string-intern table name.
+    /// Name of the shared string-intern table.
+    ///
+    /// Event targets and optional metadata strings are stored here and
+    /// referenced by integer IDs from the event table.
+    /// It follows the same identifier rules as [`Self::table_prefix`].
     pub strings_table: String,
+    /// Maximum number of events waiting for the worker.
+    ///
+    /// Event submission is non-blocking; a full queue increments the dropped
+    /// counter. A value of zero is normalized to one.
     pub queue_capacity: usize,
+    /// Maximum number of events written in one SQLite transaction.
+    ///
+    /// A value of zero is normalized to one.
     pub batch_size: usize,
+    /// Maximum time the worker waits before flushing a non-empty batch.
+    ///
+    /// A zero duration is normalized to the built-in default of ten seconds.
     pub flush_interval: Duration,
 }
 

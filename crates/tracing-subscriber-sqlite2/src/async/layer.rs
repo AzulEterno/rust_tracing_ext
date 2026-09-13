@@ -19,6 +19,12 @@ use crate::capture;
 use crate::schema::TableNames;
 
 /// Async SQLite layer backed by Tokio and `tokio-rusqlite`.
+///
+/// This type is available with the `async` feature. Event callbacks try to
+/// enqueue records without awaiting; a full queue increments the dropped
+/// counter. The worker is a Tokio task, and SQLite calls are dispatched through
+/// `tokio-rusqlite`. Clones share the worker, queue, and counters. When the last
+/// clone is dropped, the worker drains queued records and then stops.
 pub struct AsyncSqliteLayer {
     sender: mpsc::Sender<Command>,
     dropped: Arc<AtomicU64>,
@@ -36,6 +42,9 @@ impl Clone for AsyncSqliteLayer {
 }
 
 impl AsyncSqliteLayer {
+    /// Opens a database with default settings for the async backend.
+    ///
+    /// The required schema is created if it does not already exist.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, tokio_rusqlite::Error> {
         Self::open_with_config(
             path,
@@ -47,6 +56,11 @@ impl AsyncSqliteLayer {
         .await
     }
 
+    /// Opens an async SQLite layer with the supplied storage settings.
+    ///
+    /// The configuration is normalized before use: zero queue and batch sizes
+    /// become one, and a zero flush interval becomes ten seconds. The
+    /// configuration's `async_backend` must be `true`.
     pub async fn open_with_config(
         path: impl AsRef<Path>,
         config: Config,
@@ -82,6 +96,11 @@ impl AsyncSqliteLayer {
         })
     }
 
+    /// Awaits the flush marker after the async worker commits earlier batches.
+    ///
+    /// Events submitted concurrently with this call may be ordered before or
+    /// after the marker. A failed batch is counted by [`write_error_count`](Self::write_error_count)
+    /// and does not make this method return an error.
     pub async fn flush(&self) {
         let (reply, wait) = oneshot::channel();
         if self.sender.send(Command::Flush(reply)).await.is_ok() {
@@ -89,10 +108,18 @@ impl AsyncSqliteLayer {
         }
     }
 
+    /// Returns the number of event records that could not be queued.
+    ///
+    /// This includes queue-overflow and disconnected-worker failures. The
+    /// counter is shared by all clones of this layer.
     pub fn dropped_count(&self) -> u64 {
         self.dropped.load(Ordering::Relaxed)
     }
 
+    /// Returns the number of failed non-empty batch writes observed by the worker.
+    ///
+    /// The count is batch-based, so one failed transaction can represent many
+    /// events. The counter is shared by all clones of this layer.
     pub fn write_error_count(&self) -> u64 {
         self.write_errors.load(Ordering::Relaxed)
     }

@@ -7,6 +7,12 @@ use tracing_subscriber_config2::factory::BuiltLayer;
 use crate::AsyncSqliteLayer;
 use crate::SqliteFactoryConfig;
 
+/// Builds SQLite layers during asynchronous configuration preparation.
+///
+/// This type is available with both the `async` and `configurable` features.
+/// Register it with `TracingBuilder::register_async`; its configuration kind is
+/// `"sqlite"`. When `async_backend` is `false`, it delegates to the synchronous
+/// SQLite builder so one async preparation path can support either backend.
 pub struct AsyncSqliteLayerFactory;
 
 impl AsyncLayerFactory for AsyncSqliteLayerFactory {
