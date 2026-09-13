@@ -2,6 +2,23 @@
 
 use crate::factory::BuildError;
 
+/// Errors returned while claiming and initializing process-wide tracing.
+#[derive(Debug, thiserror::Error)]
+pub enum InitError {
+    /// Another caller is initializing or has initialized process-wide tracing.
+    #[error("process-wide tracing was already claimed at {first}")]
+    AlreadyInitialized {
+        /// Location of the first initialization attempt.
+        first: &'static std::panic::Location<'static>,
+    },
+    /// The tracing configuration or one of its layers could not be prepared.
+    #[error(transparent)]
+    Prepare(#[from] PrepareError),
+    /// The process-wide tracing subscriber could not be installed.
+    #[error(transparent)]
+    Install(#[from] InstallError),
+}
+
 /// Errors returned when registering layer factories.
 #[derive(Debug, thiserror::Error)]
 pub enum RegisterError {

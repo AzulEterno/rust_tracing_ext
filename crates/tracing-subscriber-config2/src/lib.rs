@@ -3,17 +3,16 @@
 //! Configuration and runtime composition of `tracing_subscriber::Layer` factories.
 //!
 //! A [`runtime::TracingBuilder`] collects named synchronous and asynchronous
-//! factories, validates a [`config::TracingConfig`], and prepares a subscriber
-//! for one global installation. Each configured layer gets its own
+//! factories, validates a [`config::TracingConfig`], and performs one guarded
+//! process-wide installation. Each configured layer gets its own
 //! [`tracing_subscriber::EnvFilter`], which can later be replaced through the
 //! returned [`runtime::TracingHandle`].
 //!
 //! # Installation
 //!
-//! [`runtime::PreparedTracing::install`] calls
-//! [`tracing::subscriber::set_global_default`]. Global subscriber installation
-//! is process-wide and can succeed only once, so prepare and validate the
-//! configuration before calling `install`.
+//! [`runtime::TracingBuilder::init_global`] validates the configuration before
+//! claiming process-wide tracing, then builds and installs the configured
+//! layers. Only one call can succeed, including when tracing is disabled.
 //!
 //! ```
 //! use tracing_subscriber_config2::config::{LayerConfig, TracingConfig};
@@ -23,8 +22,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut builder = TracingBuilder::new();
 //! builder.register(FmtLayerFactory)?;
-//! let handle = builder
-//!     .prepare(TracingConfig {
+//! let handle = builder.init_global(TracingConfig {
 //!         enabled: true,
 //!         layers: vec![LayerConfig {
 //!             name: "console".into(),
@@ -32,16 +30,15 @@
 //!             filter: "info,my_app=debug".into(),
 //!             config: serde_value::Value::Unit,
 //!         }],
-//!     })?
-//!     .install()?;
+//!     })?;
 //! handle.reload_filter("console", "warn")?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! Keep the returned handle alive while backend resource guards and filter
-//! reloads are needed. Dropping it releases those guards; it does not undo the
-//! process-wide subscriber installation.
+//! Keep the returned handle alive while backend resources and filter reloads
+//! are needed. Dropping it releases those resources but does not release the
+//! process-wide initialization claim.
 //!
 //! # Factories
 //!

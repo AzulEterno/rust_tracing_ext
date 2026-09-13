@@ -28,28 +28,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = TracingBuilder::new();
     builder.register(FmtLayerFactory)?;
 
-    let handle = builder
-        .prepare(TracingConfig {
-            enabled: true,
-            layers: vec![LayerConfig {
-                name: "console".into(),
-                kind: "fmt".into(),
-                filter: "info,my_app=debug".into(),
-                config: serde_value::Value::Unit,
-            }],
-        })?
-        .install()?;
+    let handle = builder.init_global(TracingConfig {
+        enabled: true,
+        layers: vec![LayerConfig {
+            name: "console".into(),
+            kind: "fmt".into(),
+            filter: "info,my_app=debug".into(),
+            config: serde_value::Value::Unit,
+        }],
+    })?;
 
     handle.reload_filter("console", "warn")?;
     Ok(())
 }
 ```
 
-`install` sets the process-wide tracing subscriber and can succeed only once.
-Preparation validates duplicate names, factory kinds, and filters before
-building layers. Keep the returned `TracingHandle` alive for filter reloads and
-for backend resource guards; dropping it releases those guards but does not
-remove the global subscriber.
+`init_global` validates duplicate names, factory kinds, and filters before
+claiming process-wide tracing. Factory or installation failures release the
+claim for a retry. A successful disabled configuration still claims tracing,
+and later initialization attempts report the first caller. Keep the returned
+handle alive until shutdown so backend guards can flush and stop cleanly.
 
 ## Factories
 

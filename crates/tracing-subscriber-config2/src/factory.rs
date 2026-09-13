@@ -24,8 +24,8 @@ pub type DynLayer = Box<dyn Layer<Registry> + Send + Sync + 'static>;
 
 /// Keeps backend-owned workers or providers alive for the installed subscriber.
 ///
-/// Guards are moved into [`crate::runtime::TracingHandle`] by
-/// [`crate::runtime::PreparedTracing::install`] and dropped with that handle.
+/// Guards are moved into the [`crate::runtime::TracingHandle`] returned by
+/// [`crate::runtime::TracingBuilder::init_global`] and dropped with that handle.
 /// A backend can use a guard to keep a worker alive or flush pending data
 /// during shutdown. If installation fails, the prepared value drops the guards
 /// while returning the installation error.

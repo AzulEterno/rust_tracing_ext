@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::future::Future;
 
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -6,6 +7,7 @@ use tracing_subscriber::Registry;
 use tracing_subscriber::reload;
 
 use crate::config::TracingConfig;
+use crate::error::InitError;
 use crate::error::PrepareError;
 use crate::error::RegisterError;
 use crate::factory::AsyncLayerFactory;
@@ -15,6 +17,8 @@ use crate::factory::LayerFactory;
 use crate::factory::ResourceGuard;
 use crate::registry::LayerRegistry;
 use crate::runtime::PreparedTracing;
+use crate::runtime::TracingHandle;
+use crate::runtime::global::GlobalInitClaim;
 
 /// Collects layer factories and prepares a configured subscriber.
 #[derive(Default)]
@@ -46,18 +50,88 @@ impl TracingBuilder {
         Ok(self)
     }
 
+    /// Validates a configuration for synchronous initialization without building layers.
+    pub fn validate(&self, config: &TracingConfig) -> Result<(), PrepareError> {
+        if config.enabled {
+            self.validate_layers(config, false)?;
+        }
+        Ok(())
+    }
+
+    /// Validates a configuration for asynchronous initialization without building layers.
+    pub fn validate_async(&self, config: &TracingConfig) -> Result<(), PrepareError> {
+        if config.enabled {
+            self.validate_layers(config, true)?;
+        }
+        Ok(())
+    }
+
+    /// Validates, builds, and installs process-wide tracing exactly once.
+    ///
+    /// Validation runs before the process-wide claim. Factory or installation
+    /// failures release the claim so the entrance program may retry. A
+    /// successful disabled configuration still claims tracing for the process.
+    #[track_caller]
+    pub fn init_global(&self, config: TracingConfig) -> Result<TracingHandle, InitError> {
+        let validated = if config.enabled {
+            self.validate_layers(&config, false)?
+        } else {
+            Vec::new()
+        };
+        let claim = GlobalInitClaim::acquire(std::panic::Location::caller())?;
+        let prepared = if config.enabled {
+            self.build_sync(validated)?
+        } else {
+            PreparedTracing::disabled()
+        };
+        let handle = prepared.install()?;
+        claim.commit();
+        Ok(handle)
+    }
+
+    /// Asynchronously validates, builds, and installs process-wide tracing exactly once.
+    #[track_caller]
+    pub fn init_global_async(
+        &self,
+        config: TracingConfig,
+    ) -> impl Future<Output = Result<TracingHandle, InitError>> + '_ {
+        let site = std::panic::Location::caller();
+        async move {
+            let validated = if config.enabled {
+                self.validate_layers(&config, true)?
+            } else {
+                Vec::new()
+            };
+            let claim = GlobalInitClaim::acquire(site)?;
+            let prepared = if config.enabled {
+                self.build_async(validated).await?
+            } else {
+                PreparedTracing::disabled()
+            };
+            let handle = prepared.install()?;
+            claim.commit();
+            Ok(handle)
+        }
+    }
+
     /// Validates and synchronously builds all enabled configured layers.
     ///
     /// Validation checks duplicate names, registered kinds, and filters before
-    /// any factory is built. The returned value is ready for one global
-    /// installation with [`PreparedTracing::install`](crate::runtime::PreparedTracing::install).
+    /// any factory is built. Use [`Self::init_global`] when the result should
+    /// become the process-wide subscriber.
     pub fn prepare(&self, config: TracingConfig) -> Result<PreparedTracing, PrepareError> {
         if !config.enabled {
             return Ok(PreparedTracing::disabled());
         }
 
-        let validated = self.validate(&config, false)?;
+        let validated = self.validate_layers(&config, false)?;
+        self.build_sync(validated)
+    }
 
+    fn build_sync(
+        &self,
+        validated: Vec<(&crate::config::LayerConfig, EnvFilter)>,
+    ) -> Result<PreparedTracing, PrepareError> {
         let mut layers = Vec::with_capacity(validated.len());
         let mut guards = Vec::new();
         let mut filters = std::collections::BTreeMap::new();
@@ -94,7 +168,14 @@ impl TracingBuilder {
             return Ok(PreparedTracing::disabled());
         }
 
-        let validated = self.validate(&config, true)?;
+        let validated = self.validate_layers(&config, true)?;
+        self.build_async(validated).await
+    }
+
+    async fn build_async(
+        &self,
+        validated: Vec<(&crate::config::LayerConfig, EnvFilter)>,
+    ) -> Result<PreparedTracing, PrepareError> {
         let mut layers = Vec::with_capacity(validated.len());
         let mut guards = Vec::new();
         let mut filters = std::collections::BTreeMap::new();
@@ -124,7 +205,7 @@ impl TracingBuilder {
         Ok(PreparedTracing::new(layers, guards, filters))
     }
 
-    fn validate<'a>(
+    fn validate_layers<'a>(
         &'a self,
         config: &'a TracingConfig,
         allow_async: bool,

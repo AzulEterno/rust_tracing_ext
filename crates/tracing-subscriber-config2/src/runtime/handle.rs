@@ -10,7 +10,7 @@ use crate::factory::ResourceGuard;
 /// Keeps backend resources alive and exposes per-layer filter reloads.
 ///
 /// Dropping the handle drops backend guards but cannot remove the global
-/// subscriber installed by [`super::PreparedTracing::install`].
+/// subscriber installed by [`super::TracingBuilder::init_global`].
 pub struct TracingHandle {
     _guards: Vec<Box<dyn ResourceGuard>>,
     filters: BTreeMap<String, reload::Handle<EnvFilter, Registry>>,
