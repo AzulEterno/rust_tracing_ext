@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "crates/tracing-subscriber-config2",
+    "crates/tracing-subscriber-sqlite2",
+]
+resolver = "3"
+
+[workspace.package]
+authors = ["Azuroso"]
+edition = "2024"
+rust-version = "1.92"
+license = "Not a Open Source Software"
+publish = false

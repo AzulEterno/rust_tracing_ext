@@ -1,0 +1,26 @@
+[package]
+name = "tracing-subscriber-sqlite2"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+version = "0.1.0"
+
+[features]
+default = []
+async = ["dep:tokio", "dep:tokio-rusqlite"]
+configurable = ["serde", "dep:tracing-subscriber-config2"]
+serde = ["dep:serde"]
+
+[dependencies]
+rusqlite = { version = "0", features = ["bundled"] }
+serde = { version = "1", default-features = false, optional = true, features = ["derive", "std"] }
+tokio = { version = "1", default-features = false, optional = true, features = ["rt", "sync", "time"] }
+tokio-rusqlite = { version = "0", optional = true }
+tracing = "0"
+tracing-subscriber = { version = "0", features = ["fmt", "registry"] }
+tracing-subscriber-config2 = { path = "../tracing-subscriber-config2", optional = true }
+
+[dev-dependencies]
+serde-value = "0"
