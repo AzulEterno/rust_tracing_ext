@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "crates/tracing-subscriber-config2",
+    "crates/tracing-subscriber-sqlite2",
+]
+resolver = "3"
+
+[workspace.package]
+authors = ["AzulEterno"]
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+publish = false
