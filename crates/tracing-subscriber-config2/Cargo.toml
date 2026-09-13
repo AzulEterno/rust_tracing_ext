@@ -1,5 +1,6 @@
 [package]
 name = "tracing-subscriber-config2"
+description = "Serializable configuration and runtime composition for tracing-subscriber layer factories"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 version = "0.1.0"
 readme = "README.md"
+repository.workspace = true
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive", "std"] }

@@ -10,4 +10,5 @@ authors = ["AzulEterno"]
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
-publish = false
+publish = true
+repository = "https://github.com/AzulEterno/rust_tracing_ext"

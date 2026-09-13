@@ -1,5 +1,6 @@
 [package]
 name = "tracing-subscriber-sqlite2"
+description = "Bounded batched tracing-subscriber layers backed by SQLite"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 version = "0.1.0"
 readme = "README.md"
+repository.workspace = true
 
 [features]
 default = ["bundled"]
@@ -23,7 +25,7 @@ tokio = { version = "1", default-features = false, optional = true, features = [
 tokio-rusqlite = { version = "0", optional = true }
 tracing = "0"
 tracing-subscriber = { version = "0", features = ["fmt", "registry"] }
-tracing-subscriber-config2 = { path = "../tracing-subscriber-config2", optional = true }
+tracing-subscriber-config2 = { path = "../tracing-subscriber-config2", version = "0", optional = true }
 
 [dev-dependencies]
 serde-value = "0"
